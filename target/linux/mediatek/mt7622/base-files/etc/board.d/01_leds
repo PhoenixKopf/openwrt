@@ -1,0 +1,20 @@
+#!/bin/sh
+#
+# Copyright (C) 2021 OpenWrt.org
+#
+
+. /lib/functions/uci-defaults.sh
+
+board_config_update
+
+board=$(board_name)
+
+case "$board" in
+belkin,rt3200)
+	ucidef_set_led_netdev "wan" "Internet" "white:internet" "wan"
+	;;
+esac
+
+board_config_flush
+
+exit 0

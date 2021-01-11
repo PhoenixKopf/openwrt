@@ -4,6 +4,15 @@ else
   KERNEL_LOADADDR := 0x44000000
 endif
 
+define Device/belkin_rt3200
+  DEVICE_VENDOR := Belkin
+  DEVICE_MODEL := RT3200
+  DEVICE_DTS := mt7622-belkin-rt3200
+  DEVICE_DTS_DIR := $(DTS_DIR)/mediatek
+  DEVICE_PACKAGES := kmod-usb-ohci kmod-usb2 kmod-usb3 kmod-mt7915e
+endef
+TARGET_DEVICES += belkin_rt3200
+
 define Device/bpi_bananapi-r64
   DEVICE_VENDOR := Bpi
   DEVICE_MODEL := Banana Pi R64

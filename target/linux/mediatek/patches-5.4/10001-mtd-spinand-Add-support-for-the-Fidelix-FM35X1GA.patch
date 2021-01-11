@@ -1,0 +1,160 @@
+From a6071940916dd1bbbfaebcada51a1b5e76246b8f Mon Sep 17 00:00:00 2001
+From: Davide Fioravanti <pantanastyle@gmail.com>
+Date: Thu, 7 Jan 2021 15:53:56 +0100
+Subject: [PATCH 1/1] mtd: spinand: Add support for the Fidelix FM35X1GA
+
+Datasheet: http://www.hobos.com.cn/upload/datasheet/DS35X1GAXXX_100_rev00.pdf
+
+Signed-off-by: Davide Fioravanti <pantanastyle@gmail.com>
+---
+ drivers/mtd/nand/spi/Makefile  |   2 +-
+ drivers/mtd/nand/spi/core.c    |   1 +
+ drivers/mtd/nand/spi/fidelix.c | 102 +++++++++++++++++++++++++++++++++
+ include/linux/mtd/spinand.h    |   1 +
+ 4 files changed, 105 insertions(+), 1 deletion(-)
+ create mode 100644 drivers/mtd/nand/spi/fidelix.c
+
+diff --git a/drivers/mtd/nand/spi/Makefile b/drivers/mtd/nand/spi/Makefile
+index 9662b9c..3518d01 100644
+--- a/drivers/mtd/nand/spi/Makefile
++++ b/drivers/mtd/nand/spi/Makefile
+@@ -1,3 +1,3 @@
+ # SPDX-License-Identifier: GPL-2.0
+-spinand-objs := core.o gigadevice.o macronix.o micron.o paragon.o toshiba.o winbond.o
++spinand-objs := core.o fidelix.o gigadevice.o macronix.o micron.o paragon.o toshiba.o winbond.o
+ obj-$(CONFIG_MTD_SPI_NAND) += spinand.o
+diff --git a/drivers/mtd/nand/spi/core.c b/drivers/mtd/nand/spi/core.c
+index 89f6bee..5405698 100644
+--- a/drivers/mtd/nand/spi/core.c
++++ b/drivers/mtd/nand/spi/core.c
+@@ -754,6 +754,7 @@ static const struct nand_ops spinand_ops = {
+ };
+ 
+ static const struct spinand_manufacturer *spinand_manufacturers[] = {
++	&fidelix_spinand_manufacturer,
+ 	&gigadevice_spinand_manufacturer,
+ 	&macronix_spinand_manufacturer,
+ 	&micron_spinand_manufacturer,
+diff --git a/drivers/mtd/nand/spi/fidelix.c b/drivers/mtd/nand/spi/fidelix.c
+new file mode 100644
+index 0000000..d6be752
+--- /dev/null
++++ b/drivers/mtd/nand/spi/fidelix.c
+@@ -0,0 +1,102 @@
++// SPDX-License-Identifier: GPL-2.0
++/*
++ * Copyright (c) 2020 Davide Fioravanti <pantanastyle@gmail.com>
++ *
++ */
++
++#include <linux/device.h>
++#include <linux/kernel.h>
++#include <linux/mtd/spinand.h>
++
++#define SPINAND_MFR_FIDELIX		0xE5
++
++static SPINAND_OP_VARIANTS(read_cache_variants,
++		/* SPINAND_PAGE_READ_FROM_CACHE_QUADIO_OP(0, 2, NULL, 0), */
++		SPINAND_PAGE_READ_FROM_CACHE_X4_OP(0, 1, NULL, 0),
++		/* SPINAND_PAGE_READ_FROM_CACHE_DUALIO_OP(0, 1, NULL, 0), */
++		SPINAND_PAGE_READ_FROM_CACHE_X2_OP(0, 1, NULL, 0),
++		SPINAND_PAGE_READ_FROM_CACHE_OP(true, 0, 1, NULL, 0),
++		SPINAND_PAGE_READ_FROM_CACHE_OP(false, 0, 1, NULL, 0));
++
++static SPINAND_OP_VARIANTS(write_cache_variants,
++		/* SPINAND_PROG_LOAD_X4(true, 0, NULL, 0), */
++		SPINAND_PROG_LOAD(true, 0, NULL, 0));
++
++static SPINAND_OP_VARIANTS(update_cache_variants,
++		/* SPINAND_PROG_LOAD_X4(false, 0, NULL, 0), */
++		SPINAND_PROG_LOAD(false, 0, NULL, 0));
++
++static int fm35x1ga_ooblayout_ecc(struct mtd_info *mtd, int section,
++				  struct mtd_oob_region *region)
++{
++	if (section > 0)
++		return -ERANGE;
++
++	region->offset = 32; //region->offset = (16 * section) + 8; //region->offset = (16 * section);
++	region->length = 32; //region->length = 8; //region->length = 4;
++
++	return 0;
++}
++
++static int fm35x1ga_ooblayout_free(struct mtd_info *mtd, int section,
++				   struct mtd_oob_region *region)
++{
++	if (section > 0)
++		return -ERANGE;
++
++	region->offset = 2; //region->offset = (16 * section) + 2; //region->offset = (16 * section) + 4;
++	region->length = 30; //region->length = 6; //region->length = 4;
++
++	return 0;
++}
++
++static const struct mtd_ooblayout_ops fm35x1ga_ooblayout = {
++	.ecc = fm35x1ga_ooblayout_ecc,
++	.free = fm35x1ga_ooblayout_free,
++};
++
++static const struct spinand_info fidelix_spinand_table[] = {
++	SPINAND_INFO("FM35X1GA", 0x71,
++		     NAND_MEMORG(1, 2048, 64, 64, 1024, 20, 1, 1, 1),
++		     NAND_ECCREQ(4, 512),
++		     SPINAND_INFO_OP_VARIANTS(&read_cache_variants,
++					      &write_cache_variants,
++					      &update_cache_variants),
++		     0, /* SPINAND_HAS_QE_BIT */
++		     SPINAND_ECCINFO(&fm35x1ga_ooblayout, NULL)),
++};
++
++/**
++ * fidelix_spinand_detect - initialize device related part in spinand_device
++ * struct if it is a Fidelix device.
++ * @spinand: SPI NAND device structure
++ */
++static int fidelix_spinand_detect(struct spinand_device *spinand)
++{
++	u8 *id = spinand->id.data;
++	int ret;
++
++	/*
++	 * Fidelix SPI NAND read ID need a dummy byte,
++	 * so the first byte in raw_id is dummy.
++	 */
++	if (id[1] != SPINAND_MFR_FIDELIX)
++		return 0;
++
++	ret = spinand_match_and_init(spinand, fidelix_spinand_table,
++				     ARRAY_SIZE(fidelix_spinand_table), id[2]);
++	if (ret)
++		return ret;
++
++	return 1;
++}
++
++static const struct spinand_manufacturer_ops fidelix_spinand_manuf_ops = {
++	.detect = fidelix_spinand_detect,
++};
++
++const struct spinand_manufacturer fidelix_spinand_manufacturer = {
++	.id = SPINAND_MFR_FIDELIX,
++	.name = "Fidelix",
++	.ops = &fidelix_spinand_manuf_ops,
++};
+diff --git a/include/linux/mtd/spinand.h b/include/linux/mtd/spinand.h
+index 4ea558b..0e8b976 100644
+--- a/include/linux/mtd/spinand.h
++++ b/include/linux/mtd/spinand.h
+@@ -224,6 +224,7 @@ struct spinand_manufacturer {
+ };
+ 
+ /* SPI NAND manufacturers */
++extern const struct spinand_manufacturer fidelix_spinand_manufacturer;
+ extern const struct spinand_manufacturer gigadevice_spinand_manufacturer;
+ extern const struct spinand_manufacturer macronix_spinand_manufacturer;
+ extern const struct spinand_manufacturer micron_spinand_manufacturer;
+-- 
+2.25.1
+

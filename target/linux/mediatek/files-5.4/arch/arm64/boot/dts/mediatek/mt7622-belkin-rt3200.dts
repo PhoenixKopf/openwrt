@@ -1,0 +1,443 @@
+/*
+ * Copyright (c) 2017 MediaTek Inc.
+ * Author: Ming Huang <ming.huang@mediatek.com>
+ *	   Sean Wang <sean.wang@mediatek.com>
+ *
+ * SPDX-License-Identifier: (GPL-2.0-only OR MIT)
+ */
+
+/dts-v1/;
+#include <dt-bindings/input/input.h>
+#include <dt-bindings/gpio/gpio.h>
+
+#include "mt7622.dtsi"
+#include "mt6380.dtsi"
+
+/ {
+	model = "Belkin RT3200";
+	compatible = "belkin,rt3200", "mediatek,mt7622";
+
+	aliases {
+		led-boot = &led_power_white;
+		led-failsafe = &led_power_amber;
+		led-running = &led_power_white;
+		led-upgrade = &led_power_amber;
+		label-mac-device = &wan;
+	};
+
+	chosen {
+		stdout-path = "serial0:115200n8";
+		// bootargs = "swiotlb=512 console=ttyS0,115200n1 rootfstype=squashfs";
+		// bootargs-override = "swiotlb=512 console=ttyS0,115200n1 rootfstype=squashfs";
+		// bootargs-append = " mtdparts=";
+	};
+
+	cpus {
+		cpu@0 {
+			proc-supply = <&mt6380_vcpu_reg>;
+			sram-supply = <&mt6380_vm_reg>;
+		};
+
+		cpu@1 {
+			proc-supply = <&mt6380_vcpu_reg>;
+			sram-supply = <&mt6380_vm_reg>;
+		};
+	};
+
+	gpio-keys {
+		compatible = "gpio-keys";
+		poll-interval = <100>;
+
+		reset {
+			label = "reset";
+			gpios = <&pio 0 GPIO_ACTIVE_LOW>;
+			linux,code = <KEY_RESTART>;
+		};
+
+		wps {
+			label = "wps";
+			linux,code = <KEY_WPS_BUTTON>;
+			gpios = <&pio 102 GPIO_ACTIVE_LOW>;
+		};
+	};
+
+	leds {
+		compatible = "gpio-leds";
+
+		led_power_white: power_white {
+			label = "white:power";
+			gpios = <&pio 95 GPIO_ACTIVE_LOW>;
+		};
+
+		led_power_amber: power_amber {
+			label = "amber:power";
+			gpios = <&pio 96 GPIO_ACTIVE_LOW>;
+		};
+
+		led_internet_white: internet_white {
+			label = "white:internet";
+			gpios = <&pio 97 GPIO_ACTIVE_LOW>;
+		};
+
+		led_internet_amber: internet_amber {
+			label = "amber:internet";
+			gpios = <&pio 98 GPIO_ACTIVE_LOW>;
+		};
+	};
+
+	// reg_usb_vbus: regulator {
+	// 	compatible = "regulator-fixed";
+	// 	regulator-name = "usb_vbus";
+	// 	regulator-min-microvolt = <5000000>;
+	// 	regulator-max-microvolt = <5000000>;
+	// 	gpio = <&pio 22 GPIO_ACTIVE_LOW>;
+	// 	enable-active-high;
+	// };
+
+	memory {
+		reg = <0 0x40000000 0 0x3F000000>;
+	};
+
+	reg_1p8v: regulator-1p8v {
+		compatible = "regulator-fixed";
+		regulator-name = "fixed-1.8V";
+		regulator-min-microvolt = <1800000>;
+		regulator-max-microvolt = <1800000>;
+		regulator-always-on;
+	};
+
+	reg_3p3v: regulator-3p3v {
+		compatible = "regulator-fixed";
+		regulator-name = "fixed-3.3V";
+		regulator-min-microvolt = <3300000>;
+		regulator-max-microvolt = <3300000>;
+		regulator-boot-on;
+		regulator-always-on;
+	};
+
+	reg_5v: regulator-5v {
+		compatible = "regulator-fixed";
+		regulator-name = "fixed-5V";
+		regulator-min-microvolt = <5000000>;
+		regulator-max-microvolt = <5000000>;
+		regulator-boot-on;
+		regulator-always-on;
+	};
+
+	// rtkgsw: rtkgsw@0 {
+	// 	compatible = "mediatek,rtk-gsw";
+	// 	mediatek,ethsys = <&ethsys>;
+	// 	mediatek,mdio = <&mdio>;
+	// 	mediatek,reset-pin = <&pio 54 0>;
+	// 	status = "okay";
+	// };
+};
+
+&pcie0 {
+	pinctrl-names = "default";
+	pinctrl-0 = <&pcie0_pins>;
+	status = "okay";
+};
+
+// &pcie1 {
+// 	pinctrl-names = "default";
+// 	pinctrl-0 = <&pcie1_pins>;
+// 	status = "okay";
+// };
+
+&slot0 {
+	mt7915@0,0 {
+		compatible = "mediatek,mt76";
+		reg = <0x0000 0 0 0 0>;
+		device_type = "pci";
+		mediatek,mtd-eeprom = <&factory 0x05000>;
+		ieee80211-freq-limit = <5000000 6000000>;
+	};
+};
+
+&pio {
+	eth_pins: eth-pins {
+		mux {
+			function = "eth";
+			groups = "mdc_mdio", "rgmii_via_gmac2";
+		};
+	};
+
+	pcie0_pins: pcie0-pins {
+		mux {
+			function = "pcie";
+			groups = "pcie0_pad_perst",
+				 "pcie0_1_waken",
+				 "pcie0_1_clkreq";
+		};
+	};
+
+	// pcie1_pins: pcie1-pins {
+	// 	mux {
+	// 		function = "pcie";
+	// 		groups = "pcie1_pad_perst",
+	// 			 "pcie1_0_waken",
+	// 			 "pcie1_0_clkreq";
+	// 	};
+	// };
+
+	pmic_bus_pins: pmic-bus-pins {
+		mux {
+			function = "pmic";
+			groups = "pmic_bus";
+		};
+	};
+
+	/* serial NAND is shared pin with SPI-NOR */
+	serial_nand_pins: serial-nand-pins {
+		mux {
+			function = "flash";
+			groups = "snfi";
+		};
+	};
+
+	uart0_pins: uart0-pins {
+		mux {
+			function = "uart";
+			groups = "uart0_0_tx_rx" ;
+		};
+	};
+
+	watchdog_pins: watchdog-pins {
+		mux {
+			function = "watchdog";
+			groups = "watchdog";
+		};
+	};
+};
+
+&bch {
+	status = "okay";
+};
+
+&btif {
+	status = "disabled";
+};
+
+&cir {
+	status = "disabled";
+};
+
+&pwrap {
+	pinctrl-names = "default";
+	pinctrl-0 = <&pmic_bus_pins>;
+
+	status = "okay";
+};
+
+&eth {
+	status = "okay";
+	gmac0: mac@0 {
+		compatible = "mediatek,eth-mac";
+		reg = <0>;
+		mtd-mac-address = <&factory 0x7FFF4>;
+		phy-mode = "2500base-x";
+		// phy-mode = "sgmii";
+
+		fixed-link {
+			speed = <2500>;
+			// speed = <1000>;
+			full-duplex;
+			pause;
+		};
+	};
+
+	gmac1: mac@1 {
+		compatible = "mediatek,eth-mac";
+		reg = <1>;
+		mtd-mac-address = <&factory 0x7FFFA>;
+		phy-mode = "rgmii";
+
+		fixed-link {
+			speed = <1000>;
+			full-duplex;
+			pause;
+		};
+	};
+
+	mdio: mdio-bus {
+		#address-cells = <1>;
+		#size-cells = <0>;
+
+		switch@1f {
+			compatible = "mediatek,mt7531";
+			reg = <0x1f>;
+			reset-gpios = <&pio 54 0>;
+
+			ports {
+				#address-cells = <1>;
+				#size-cells = <0>;
+
+				port@0 {
+					reg = <0>;
+					label = "lan1";
+				};
+
+				port@1 {
+					reg = <1>;
+					label = "lan2";
+				};
+
+				port@2 {
+					reg = <2>;
+					label = "lan3";
+				};
+
+				port@3 {
+					reg = <3>;
+					label = "lan4";
+				};
+
+				wan: port@4 {
+					reg = <4>;
+					label = "wan";
+					mtd-mac-address = <&factory 0x7FFFA>;
+				};
+
+				// Currently 2 cpu port are not supported in DSA
+				// port@5 {
+				// 	reg = <5>;
+				// 	label = "cpu";
+				// 	ethernet = <&gmac1>;
+				// 	phy-mode = "rgmii";
+
+				// 	fixed-link {
+				// 		speed = <1000>;
+				// 		full-duplex;
+				// 		pause;
+				// 	};
+				// };
+
+				port@6 {
+					reg = <6>;
+					label = "cpu";
+					ethernet = <&gmac0>;
+					phy-mode = "2500base-x";
+
+					fixed-link {
+						speed = <2500>;
+						full-duplex;
+						pause;
+					};
+				};
+			};
+		};
+
+	};
+};
+
+&snfi {
+	pinctrl-names = "default";
+	pinctrl-0 = <&serial_nand_pins>;
+	status = "okay";
+
+	spi_nand@0 {
+		#address-cells = <1>;
+		#size-cells = <1>;
+		compatible = "spi-nand";
+		spi-max-frequency = <104000000>;
+		reg = <0>;
+
+		mediatek,bmt-v2;
+
+		partitions {
+			compatible = "fixed-partitions";
+			#address-cells = <1>;
+			#size-cells = <1>;
+
+			partition@0 {
+				label = "Preloader";
+				reg = <0x00000 0x0080000>;
+				read-only;
+			};
+
+			partition@80000 {
+				label = "ATF";
+				reg = <0x80000 0x0040000>;
+				read-only;
+			};
+
+			partition@c0000 {
+				label = "Bootloader";
+				reg = <0xc0000 0x0080000>;
+				read-only;
+			};
+
+			partition@140000 {
+				label = "Config";
+				reg = <0x140000 0x0080000>;
+				read-only;
+			};
+
+			factory: partition@1c0000 {
+				label = "Factory";
+				reg = <0x1c0000 0x0100000>;
+				read-only;
+			};
+			partition@300000 {
+				label = "Devinfo";
+				reg = <0x300000 0x0020000>;
+				read-only;
+			};
+			partition@320000 {
+				label = "senv";
+				reg = <0x320000 0x0020000>;
+			};
+			partition@360000 {
+				label = "bootseq";
+				reg = <0x360000 0x0020000>;
+				read-only;
+			};
+			
+			partition@500000 {
+				compatible = "denx,fit";
+				label = "firmware"; // label = "Kernel1";
+				reg = <0x500000 0x1e00000>;
+			};
+			
+			partition@2300000 {
+				label = "Kernel2";
+				reg = <0x2300000 0x1e00000>;
+				read-only;
+			};
+
+    		partition@5a00000 {
+				label = "mfg";
+				reg = <0x5a00000 0x1400000>;
+				read-only;
+			};
+		};
+	};
+};
+
+&ssusb {
+	vusb33-supply = <&reg_3p3v>;
+	vbus-supply = <&reg_5v>;
+	status = "okay";
+};
+
+&u3phy {
+	status = "okay";
+};
+
+&uart0 {
+	pinctrl-names = "default";
+	pinctrl-0 = <&uart0_pins>;
+	status = "okay";
+};
+
+&watchdog {
+	pinctrl-names = "default";
+	pinctrl-0 = <&watchdog_pins>;
+	status = "okay";
+};
+
+&wmac {
+	mediatek,mtd-eeprom = <&factory 0x0000>;
+	status = "okay";
+};
